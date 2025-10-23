@@ -682,10 +682,3 @@ func TestDecryptionErrorCases(t *testing.T) {
 		})
 	}
 }
-
-// 辅助函数：深度比较两个interface{}
-func deepEqual(a, b interface{}) bool {
-	aBytes, _ := json.Marshal(a)
-	bBytes, _ := json.Marshal(b)
-	return string(aBytes) == string(bBytes)
-}

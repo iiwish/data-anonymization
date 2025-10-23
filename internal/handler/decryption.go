@@ -41,7 +41,7 @@ func (h *DecryptionHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	if req.Mappings == nil || len(req.Mappings) == 0 {
+	if len(req.Mappings) == 0 {
 		latency := time.Since(start).Milliseconds()
 		logger.LogRequest("DecryptionService", systemID.(string), userID.(string), "FAILED", latency, "mappings不能为空")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "mappings不能为空"})
