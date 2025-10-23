@@ -1,0 +1,19 @@
+{
+  "systems": [
+    {
+      "system_id": "BI_REPORT_SYSTEM",
+      "shared_secret": "a_very_strong_and_long_secret_for_bi",
+      "description": "商业智能报表分析系统"
+    },
+    {
+      "system_id": "CUSTOMER_SERVICE_BOT",
+      "shared_secret": "another_unique_secret_for_the_chatbot",
+      "description": "客户服务聊天机器人"
+    }
+  ],
+  "server": {
+    "port": 8080,
+    "log_file": "logs/service.log",
+    "timestamp_window_seconds": 300
+  }
+}
