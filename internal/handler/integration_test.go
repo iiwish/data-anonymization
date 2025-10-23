@@ -67,7 +67,6 @@ func TestAnonymizationEndToEnd(t *testing.T) {
 
 	// 准备请求数据
 	requestBody := map[string]interface{}{
-		"session_id": "test_session_123",
 		"payload": map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"report_name": "Q3 Sales Analysis for 华东",
@@ -151,9 +150,6 @@ func TestAnonymizationEndToEnd(t *testing.T) {
 	}
 
 	// 验证响应结构
-	if response["session_id"] != "test_session_123" {
-		t.Errorf("session_id不正确，期望 'test_session_123'，得到 %v", response["session_id"])
-	}
 
 	// 验证anonymized_payload存在
 	anonymizedPayload, ok := response["anonymized_payload"].(map[string]interface{})
@@ -382,8 +378,7 @@ func TestAnonymizationAndDecryptionIntegration(t *testing.T) {
 	}
 
 	anonymizeRequest := map[string]interface{}{
-		"session_id": "integration_test_session",
-		"payload":    originalPayload,
+		"payload": originalPayload,
 		"anonymization_rules": []interface{}{
 			map[string]interface{}{
 				"strategy": "MAP_CODE",
@@ -540,20 +535,8 @@ func TestAnonymizationErrorCases(t *testing.T) {
 		expectedError  string
 	}{
 		{
-			name: "缺少session_id",
-			requestBody: map[string]interface{}{
-				"payload": map[string]interface{}{
-					"test": "value",
-				},
-				"anonymization_rules": []interface{}{},
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "session_id不能为空",
-		},
-		{
 			name: "缺少payload",
 			requestBody: map[string]interface{}{
-				"session_id":          "test_session",
 				"anonymization_rules": []interface{}{},
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -562,7 +545,6 @@ func TestAnonymizationErrorCases(t *testing.T) {
 		{
 			name: "缺少anonymization_rules",
 			requestBody: map[string]interface{}{
-				"session_id": "test_session",
 				"payload": map[string]interface{}{
 					"test": "value",
 				},

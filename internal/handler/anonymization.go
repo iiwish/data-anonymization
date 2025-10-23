@@ -39,13 +39,6 @@ func (h *AnonymizationHandler) Handle(c *gin.Context) {
 	}
 
 	// 验证必需字段
-	if req.SessionID == "" {
-		latency := time.Since(start).Milliseconds()
-		logger.LogRequest("AnonymizationService", systemID.(string), userID.(string), "FAILED", latency, "session_id不能为空")
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "session_id不能为空"})
-		return
-	}
-
 	if req.Payload == nil {
 		latency := time.Since(start).Milliseconds()
 		logger.LogRequest("AnonymizationService", systemID.(string), userID.(string), "FAILED", latency, "payload不能为空")
@@ -77,7 +70,6 @@ func (h *AnonymizationHandler) Handle(c *gin.Context) {
 
 	// 构造响应
 	response := service.AnonymizationResponse{
-		SessionID:         req.SessionID,
 		AnonymizedPayload: anonymizedPayload,
 		MappingsToStore:   mappings,
 	}

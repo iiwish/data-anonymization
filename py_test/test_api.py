@@ -136,7 +136,6 @@ class DataAnonymizationTester:
         
         # 构建请求体
         request_body = {
-            "session_id": f"sess_{int(time.time())}",
             "payload": {
                 "metadata": {
                     "report_name": "Q3 Sales Analysis for {华东}",

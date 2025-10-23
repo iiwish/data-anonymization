@@ -287,7 +287,6 @@ func TestAnonymizer_Passthrough(t *testing.T) {
 func TestAnonymizationRequest_JSON(t *testing.T) {
 	// 测试JSON序列化和反序列化
 	jsonStr := `{
-		"session_id": "sess_12345",
 		"payload": {
 			"test": "value"
 		},
@@ -306,10 +305,6 @@ func TestAnonymizationRequest_JSON(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonStr), &req)
 	if err != nil {
 		t.Fatalf("JSON反序列化失败: %v", err)
-	}
-
-	if req.SessionID != "sess_12345" {
-		t.Errorf("session_id不正确，期望 'sess_12345'，得到 '%s'", req.SessionID)
 	}
 
 	if len(req.AnonymizationRules) != 1 {

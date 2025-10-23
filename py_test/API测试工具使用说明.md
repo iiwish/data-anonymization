@@ -95,7 +95,6 @@ python test_api.py http://192.168.1.100:8080
 ### 匿名化测试数据
 ```json
 {
-  "session_id": "sess_时间戳",
   "payload": {
     "metadata": {
       "report_name": "Q3 Sales Analysis for {华东}",

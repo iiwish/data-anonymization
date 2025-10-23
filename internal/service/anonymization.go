@@ -31,14 +31,12 @@ type AnonymizationRule struct {
 
 // AnonymizationRequest 匿名化请求
 type AnonymizationRequest struct {
-	SessionID          string              `json:"session_id"`
 	Payload            interface{}         `json:"payload"`
 	AnonymizationRules []AnonymizationRule `json:"anonymization_rules"`
 }
 
 // AnonymizationResponse 匿名化响应
 type AnonymizationResponse struct {
-	SessionID         string                 `json:"session_id"`
 	AnonymizedPayload interface{}            `json:"anonymized_payload"`
 	MappingsToStore   map[string]interface{} `json:"mappings_to_store"`
 }
