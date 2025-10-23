@@ -230,86 +230,10 @@ class DataAnonymizationTester:
             print(f"❌ 请求异常: {e}")
             return None
     
-    def test_decrypt_json(self, system_id: str = "BI_REPORT_SYSTEM", user_id: str = "test_user_001"):
-        """
-        测试解密接口（JSON格式）
-        
-        Args:
-            system_id: 系统ID
-            user_id: 用户ID
-        """
-        print("🚀 开始测试解密接口（JSON格式）")
-        
-        # 尝试加载之前保存的映射表
-        # try:
-        #     with open("test_mappings.json", "r", encoding="utf-8") as f:
-        #         mappings = json.load(f)
-        # except FileNotFoundError:
-        #     print("⚠️  未找到映射表文件，使用示例映射")
-        mappings = {
-            "categorical_mappings": {
-                "REGION": {"REGION_a3f5": "华东", "REGION_b1e9": "华北"},
-                "PRODUCT": {"PRODUCT_c8b1": "手机", "PRODUCT_d2a7": "电脑"}
-            },
-            "metric_placeholder_mappings": {
-                "USER_COUNT_plc_1": 12000,
-                "USER_COUNT_plc_2": 8500
-            }
-        }
-        
-        # 构建请求体（JSON格式）
-        request_body = {
-            "data_with_anonymized_codes": {
-                "summary": "REGION_a3f5 区域表现突出，主要贡献来自 PRODUCT_c8b1。",
-                "key_findings": [
-                    {"dimension": "区域", "value": "REGION_a3f5"},
-                    {"dimension": "产品", "value": "PRODUCT_c8b1"}
-                ]
-            },
-            "mappings": mappings
-        }
-        
-        request_body_str = json.dumps(request_body, ensure_ascii=False)
-        signature_info = self.generate_signature(system_id, user_id, request_body_str)
-        
-        # 打印调试信息
-        self.print_debug_info(signature_info, request_body_str, "/v1/decrypt")
-        
-        # 发送请求
-        headers = {
-            "Authorization": self.build_auth_header(signature_info),
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            response = self.session.post(
-                f"{self.base_url}/v1/decrypt",
-                headers=headers,
-                data=request_body_str.encode('utf-8'),
-                timeout=30
-            )
-            
-            print("📡 响应信息:")
-            print(f"   状态码: {response.status_code}")
-            print(f"   响应头: {dict(response.headers)}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                print("✅ 解密成功!")
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-                return result
-            else:
-                print(f"❌ 请求失败: {response.status_code}")
-                print(f"   错误信息: {response.text}")
-                return None
-                
-        except requests.exceptions.RequestException as e:
-            print(f"❌ 请求异常: {e}")
-            return None
     
     def test_decrypt_text(self, system_id: str = "BI_REPORT_SYSTEM", user_id: str = "test_user_001"):
         """
-        测试解密接口（纯文本格式）
+        测试解密接口（纯文本格式）- 编码必须带大括号
         
         Args:
             system_id: 系统ID
@@ -334,9 +258,9 @@ class DataAnonymizationTester:
                 }
             }
         
-        # 构建请求体（纯文本格式）
+        # 构建请求体（纯文本格式）- 编码必须带大括号
         request_body = {
-            "data_with_anonymized_codes": "分析显示，REGION_a3f5 区域的 PRODUCT_c8b1 表现最佳，活跃用户数为 USER_COUNT_plc_1。",
+            "data_with_anonymized_codes": "分析显示，{REGION_a3f5} 区域的 {PRODUCT_c8b1} 表现最佳，活跃用户数为 {USER_COUNT_plc_1}。",
             "mappings": mappings
         }
         
@@ -395,22 +319,13 @@ class DataAnonymizationTester:
         print("="*80)
         time.sleep(2)
         
-        # 2. 测试解密接口（JSON格式）
-        decrypt_json_result = self.test_decrypt_json()
-        
-        print("\n" + "="*80)
-        print("⏳ 等待2秒后继续文本解密测试...")
-        print("="*80)
-        time.sleep(2)
-        
-        # 3. 测试解密接口（纯文本格式）
+        # 2. 测试解密接口（纯文本格式）
         decrypt_text_result = self.test_decrypt_text()
         
         print("\n" + "="*80)
         print("📊 测试总结")
         print("="*80)
         print(f"✅ 匿名化测试: {'成功' if anonymize_result else '失败'}")
-        print(f"✅ JSON解密测试: {'成功' if decrypt_json_result else '失败'}")
         print(f"✅ 文本解密测试: {'成功' if decrypt_text_result else '失败'}")
         print("="*80)
 
@@ -432,21 +347,18 @@ def main():
         print("\n请选择测试选项:")
         print("1. 运行完整测试流程")
         print("2. 仅测试匿名化接口")
-        print("3. 仅测试解密接口（JSON格式）")
-        print("4. 仅测试解密接口（纯文本格式）")
-        print("5. 退出")
+        print("3. 仅测试解密接口（纯文本格式）")
+        print("4. 退出")
         
-        choice = input("\n请输入选项 (1-5): ").strip()
+        choice = input("\n请输入选项 (1-4): ").strip()
         
         if choice == "1":
             tester.run_all_tests()
         elif choice == "2":
             tester.test_anonymize()
         elif choice == "3":
-            tester.test_decrypt_json()
-        elif choice == "4":
             tester.test_decrypt_text()
-        elif choice == "5":
+        elif choice == "4":
             print("👋 退出测试工具")
             break
         else:

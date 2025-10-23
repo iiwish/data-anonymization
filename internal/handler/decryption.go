@@ -34,7 +34,7 @@ func (h *DecryptionHandler) Handle(c *gin.Context) {
 	}
 
 	// 验证必需字段
-	if req.DataWithAnonymizedCodes == nil {
+	if req.DataWithAnonymizedCodes == "" {
 		latency := time.Since(start).Milliseconds()
 		logger.LogRequest("DecryptionService", systemID.(string), userID.(string), "FAILED", latency, "data_with_anonymized_codes不能为空")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "data_with_anonymized_codes不能为空"})

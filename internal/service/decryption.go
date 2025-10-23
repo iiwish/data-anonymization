@@ -2,19 +2,18 @@ package service
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 )
 
 // DecryptionRequest 解密请求
 type DecryptionRequest struct {
-	DataWithAnonymizedCodes interface{}            `json:"data_with_anonymized_codes"`
+	DataWithAnonymizedCodes string                 `json:"data_with_anonymized_codes"`
 	Mappings                map[string]interface{} `json:"mappings"`
 }
 
 // DecryptionResponse 解密响应
 type DecryptionResponse struct {
-	DecryptedData interface{} `json:"decrypted_data"`
+	DecryptedData string `json:"decrypted_data"`
 }
 
 // Decryptor 解密器
@@ -58,97 +57,27 @@ func NewDecryptor(mappings map[string]interface{}) *Decryptor {
 }
 
 // Decrypt 执行解密
-func (d *Decryptor) Decrypt(data interface{}) interface{} {
-	if data == nil {
-		return nil
-	}
-
-	// 判断数据类型
-	v := reflect.ValueOf(data)
-
-	switch v.Kind() {
-	case reflect.String:
-		// 纯文本字符串，进行全局替换
-		return d.decryptString(data.(string))
-	case reflect.Map:
-		// JSON对象，递归处理
-		return d.decryptValue(data)
-	case reflect.Slice:
-		// 数组，递归处理
-		return d.decryptValue(data)
-	default:
-		return data
-	}
-}
-
-// decryptValue 递归解密值
-func (d *Decryptor) decryptValue(value interface{}) interface{} {
-	if value == nil {
-		return nil
-	}
-
-	v := reflect.ValueOf(value)
-
-	switch v.Kind() {
-	case reflect.Map:
-		return d.decryptMap(value.(map[string]interface{}))
-	case reflect.Slice:
-		return d.decryptSlice(value.([]interface{}))
-	case reflect.String:
-		return d.decryptStringValue(value.(string))
-	default:
-		return value
-	}
-}
-
-// decryptMap 解密map
-func (d *Decryptor) decryptMap(m map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range m {
-		result[k] = d.decryptValue(v)
-	}
-	return result
-}
-
-// decryptSlice 解密切片
-func (d *Decryptor) decryptSlice(s []interface{}) []interface{} {
-	result := make([]interface{}, len(s))
-	for i, v := range s {
-		result[i] = d.decryptValue(v)
-	}
-	return result
-}
-
-// decryptStringValue 解密字符串值（精确替换）
-func (d *Decryptor) decryptStringValue(s string) interface{} {
-	// 首先检查是否是占位符（完全匹配）
-	if value, ok := d.metricPlaceholderMappings[s]; ok {
-		return value
-	}
-
-	// 然后检查是否是编码（完全匹配）
-	if value, ok := d.codeToValue[s]; ok {
-		return value
-	}
-
-	// 如果不是完全匹配，进行文本内替换
-	return d.decryptString(s)
+func (d *Decryptor) Decrypt(text string) string {
+	// 只处理纯文本字符串
+	return d.decryptString(text)
 }
 
 // decryptString 解密纯文本字符串（全局替换）
 func (d *Decryptor) decryptString(text string) string {
 	result := text
 
-	// 替换所有分类编码
+	// 替换所有分类编码（大括号格式）
 	for code, value := range d.codeToValue {
-		result = strings.ReplaceAll(result, code, value)
+		encodedCode := "{" + code + "}"
+		result = strings.ReplaceAll(result, encodedCode, value)
 	}
 
-	// 替换所有占位符
+	// 替换所有占位符（大括号格式）
 	for placeholder, value := range d.metricPlaceholderMappings {
+		encodedPlaceholder := "{" + placeholder + "}"
 		// 将数值转换为字符串
 		valueStr := formatValue(value)
-		result = strings.ReplaceAll(result, placeholder, valueStr)
+		result = strings.ReplaceAll(result, encodedPlaceholder, valueStr)
 	}
 
 	return result

@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -317,5 +318,249 @@ func TestAnonymizationRequest_JSON(t *testing.T) {
 
 	if req.AnonymizationRules[0].Strategy != StrategyMapCode {
 		t.Errorf("策略不正确，期望 'MAP_CODE'，得到 '%s'", req.AnonymizationRules[0].Strategy)
+	}
+}
+
+func TestAnonymizer_EdgeCases(t *testing.T) {
+	// 测试空规则
+	rules := []AnonymizationRule{}
+	anonymizer := NewAnonymizer(rules)
+
+	payload := map[string]interface{}{
+		"test": "value",
+	}
+
+	result, err := anonymizer.Anonymize(payload)
+	if err != nil {
+		t.Fatalf("匿名化失败: %v", err)
+	}
+
+	// 没有规则时应该返回原值
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatal("结果应该是map类型")
+	}
+
+	if resultMap["test"] != "value" {
+		t.Errorf("没有规则时应该保持原值，期望 'value'，得到 '%v'", resultMap["test"])
+	}
+
+	// 测试nil payload
+	result2, err := anonymizer.Anonymize(nil)
+	if err != nil {
+		t.Fatalf("匿名化nil失败: %v", err)
+	}
+
+	if result2 != nil {
+		t.Errorf("nil payload应该返回nil，得到 %v", result2)
+	}
+}
+
+func TestAnonymizer_ComplexNestedStructure(t *testing.T) {
+	rules := []AnonymizationRule{
+		{
+			Strategy: StrategyMapCode,
+			AppliesTo: struct {
+				Type   string        `json:"type"`
+				Values []interface{} `json:"values"`
+			}{
+				Type:   "REGION",
+				Values: []interface{}{"华东", "华北"},
+			},
+		},
+	}
+
+	anonymizer := NewAnonymizer(rules)
+
+	// 创建复杂的嵌套结构
+	payload := map[string]interface{}{
+		"level1": map[string]interface{}{
+			"level2": map[string]interface{}{
+				"level3": []interface{}{
+					map[string]interface{}{
+						"region": "华东",
+						"data":   []interface{}{"华东", "其他"},
+					},
+					map[string]interface{}{
+						"region": "华北",
+						"data":   []interface{}{"华北", "其他"},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := anonymizer.Anonymize(payload)
+	if err != nil {
+		t.Fatalf("匿名化失败: %v", err)
+	}
+
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatal("结果应该是map类型")
+	}
+
+	// 验证嵌套结构中的值已被替换
+	level1, ok := resultMap["level1"].(map[string]interface{})
+	if !ok {
+		t.Fatal("level1格式不正确")
+	}
+
+	level2, ok := level1["level2"].(map[string]interface{})
+	if !ok {
+		t.Fatal("level2格式不正确")
+	}
+
+	level3, ok := level2["level3"].([]interface{})
+	if !ok {
+		t.Fatal("level3格式不正确")
+	}
+
+	firstItem, ok := level3[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("level3第一个元素格式不正确")
+	}
+
+	region, ok := firstItem["region"].(string)
+	if !ok {
+		t.Fatal("region应该是字符串")
+	}
+
+	if region == "华东" {
+		t.Error("嵌套结构中的华东应该被匿名化")
+	}
+
+	// 验证映射表
+	mappings := anonymizer.GetMappings()
+	catMappings, ok := mappings["categorical_mappings"].(map[string]map[string]string)
+	if !ok {
+		t.Fatal("映射表格式不正确")
+	}
+
+	if len(catMappings["REGION"]) != 2 {
+		t.Errorf("应该有2个REGION映射，但有 %d 个", len(catMappings["REGION"]))
+	}
+}
+
+func TestAnonymizer_EncodingFormat(t *testing.T) {
+	rules := []AnonymizationRule{
+		{
+			Strategy: StrategyMapCode,
+			AppliesTo: struct {
+				Type   string        `json:"type"`
+				Values []interface{} `json:"values"`
+			}{
+				Type:   "TEST",
+				Values: []interface{}{"test_value"},
+			},
+		},
+	}
+
+	anonymizer := NewAnonymizer(rules)
+
+	result := anonymizer.anonymizeString("test_value")
+
+	// 验证编码格式：应该不带大括号
+	if strings.Contains(result, "{") || strings.Contains(result, "}") {
+		t.Errorf("编码不应该包含大括号，得到: %s", result)
+	}
+
+	// 验证编码格式：应该以类型开头
+	if !strings.HasPrefix(result, "TEST_") {
+		t.Errorf("编码应该以类型开头，得到: %s", result)
+	}
+
+	// 验证编码长度
+	if len(result) < 8 {
+		t.Errorf("编码长度太短: %s", result)
+	}
+}
+
+func TestAnonymizer_StringReplacementOrder(t *testing.T) {
+	rules := []AnonymizationRule{
+		{
+			Strategy: StrategyMapCode,
+			AppliesTo: struct {
+				Type   string        `json:"type"`
+				Values []interface{} `json:"values"`
+			}{
+				Type:   "SHORT",
+				Values: []interface{}{"华东"},
+			},
+		},
+		{
+			Strategy: StrategyMapCode,
+			AppliesTo: struct {
+				Type   string        `json:"type"`
+				Values []interface{} `json:"values"`
+			}{
+				Type:   "LONG",
+				Values: []interface{}{"华东地区"},
+			},
+		},
+	}
+
+	anonymizer := NewAnonymizer(rules)
+
+	// 测试替换顺序：长值应该先被替换，避免短值替换破坏长值
+	text := "华东地区的华东"
+	result := anonymizer.anonymizeString(text)
+
+	// 验证长值"华东地区"被替换
+	if strings.Contains(result, "华东地区") {
+		t.Error("长值'华东地区'应该被替换")
+	}
+
+	// 验证短值"华东"被替换
+	if strings.Contains(result, "华东") {
+		t.Error("短值'华东'应该被替换")
+	}
+
+	// 验证结果中不包含原始值
+	if result == text {
+		t.Error("文本应该被匿名化")
+	}
+}
+
+func TestAnonymizer_NumberTypes(t *testing.T) {
+	rules := []AnonymizationRule{
+		{
+			Strategy: StrategyTransform,
+			StrategyParams: map[string]interface{}{
+				"noise_level": 0.05,
+			},
+			AppliesTo: struct {
+				Type   string        `json:"type"`
+				Values []interface{} `json:"values"`
+			}{
+				Type:   "REVENUE",
+				Values: []interface{}{1000.0, 2000},
+			},
+		},
+	}
+
+	anonymizer := NewAnonymizer(rules)
+
+	// 测试float64
+	result1 := anonymizer.anonymizeNumber(1000.0)
+	result1Float, ok := result1.(float64)
+	if !ok {
+		t.Error("float64转换结果应该是float64类型")
+	}
+
+	// 测试int
+	result2 := anonymizer.anonymizeNumber(2000)
+	result2Float, ok := result2.(float64)
+	if !ok {
+		t.Error("int转换结果应该是float64类型")
+	}
+
+	// 验证加噪范围
+	if result1Float < 950 || result1Float > 1050 {
+		t.Errorf("转换后的值 %f 超出预期范围 [950, 1050]", result1Float)
+	}
+
+	if result2Float < 1900 || result2Float > 2100 {
+		t.Errorf("转换后的值 %f 超出预期范围 [1900, 2100]", result2Float)
 	}
 }

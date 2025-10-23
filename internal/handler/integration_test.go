@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -210,119 +211,9 @@ func TestAnonymizationEndToEnd(t *testing.T) {
 func TestDecryptionEndToEnd(t *testing.T) {
 	router := setupRouter()
 
-	// 准备请求数据（使用JSON对象格式）
-	requestBody := map[string]interface{}{
-		"data_with_anonymized_codes": map[string]interface{}{
-			"summary": "REGION_a3f5 区域表现突出，主要贡献来自 PRODUCT_c8b1。",
-			"key_findings": []interface{}{
-				map[string]interface{}{
-					"dimension": "区域",
-					"value":     "REGION_a3f5",
-				},
-				map[string]interface{}{
-					"dimension": "产品",
-					"value":     "PRODUCT_c8b1",
-				},
-			},
-		},
-		"mappings": map[string]interface{}{
-			"categorical_mappings": map[string]interface{}{
-				"REGION": map[string]interface{}{
-					"REGION_a3f5": "华东",
-				},
-				"PRODUCT": map[string]interface{}{
-					"PRODUCT_c8b1": "手机",
-				},
-			},
-		},
-	}
-
-	requestBodyBytes, _ := json.Marshal(requestBody)
-	requestBodyStr := string(requestBodyBytes)
-
-	// 生成签名
-	systemID := "BI_REPORT_SYSTEM"
-	userID := "user123"
-	secret := "a_very_strong_and_long_secret_for_bi"
-	signature := generateSignature(systemID, userID, secret, requestBodyStr)
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-
-	authHeader := "MCP-HMAC-SHA256 SystemID=" + systemID + ",UserID=" + userID + ",Timestamp=" + timestamp + ",Signature=" + signature
-
-	// 创建请求
-	req, _ := http.NewRequest("POST", "/v1/decrypt", bytes.NewBufferString(requestBodyStr))
-	req.Header.Set("Authorization", authHeader)
-	req.Header.Set("Content-Type", "application/json")
-
-	// 执行请求
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// 验证响应
-	if w.Code != http.StatusOK {
-		t.Errorf("期望状态码 200，得到 %d, 响应: %s", w.Code, w.Body.String())
-		return
-	}
-
-	// 解析响应
-	var response map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		t.Fatalf("解析响应失败: %v", err)
-	}
-
-	// 验证decrypted_data存在
-	decryptedData, ok := response["decrypted_data"].(map[string]interface{})
-	if !ok {
-		t.Fatal("decrypted_data格式不正确")
-	}
-
-	// 验证summary已被解密
-	summary, ok := decryptedData["summary"].(string)
-	if !ok {
-		t.Fatal("summary应该是字符串")
-	}
-
-	if !contains(summary, "华东") {
-		t.Errorf("summary应该包含 '华东'，但实际是: %s", summary)
-	}
-
-	if !contains(summary, "手机") {
-		t.Errorf("summary应该包含 '手机'，但实际是: %s", summary)
-	}
-
-	// 验证key_findings
-	findings, ok := decryptedData["key_findings"].([]interface{})
-	if !ok {
-		t.Fatal("key_findings应该是数组")
-	}
-
-	if len(findings) != 2 {
-		t.Fatalf("key_findings应该有2个元素，但有 %d 个", len(findings))
-	}
-
-	// 验证第一个finding
-	firstFinding, ok := findings[0].(map[string]interface{})
-	if !ok {
-		t.Fatal("第一个finding应该是map")
-	}
-
-	value, ok := firstFinding["value"].(string)
-	if !ok {
-		t.Fatal("value应该是字符串")
-	}
-
-	if value != "华东" {
-		t.Errorf("value应该是 '华东'，但是 '%s'", value)
-	}
-}
-
-// TestDecryptionEndToEnd_TextString 解密纯文本字符串的端到端测试
-func TestDecryptionEndToEnd_TextString(t *testing.T) {
-	router := setupRouter()
-
 	// 准备请求数据（使用纯文本字符串格式）
 	requestBody := map[string]interface{}{
-		"data_with_anonymized_codes": "分析显示，REGION_a3f5 区域的 PRODUCT_c8b1 表现最佳。",
+		"data_with_anonymized_codes": "分析显示，{REGION_a3f5} 区域表现突出，主要贡献来自 {PRODUCT_c8b1}。",
 		"mappings": map[string]interface{}{
 			"categorical_mappings": map[string]interface{}{
 				"REGION": map[string]interface{}{
@@ -384,12 +275,89 @@ func TestDecryptionEndToEnd_TextString(t *testing.T) {
 	}
 
 	// 验证编码已被替换
-	if contains(decryptedData, "REGION_a3f5") {
-		t.Errorf("解密后的文本不应该包含 'REGION_a3f5'，但实际是: %s", decryptedData)
+	if contains(decryptedData, "{REGION_a3f5}") {
+		t.Errorf("解密后的文本不应该包含 '{REGION_a3f5}'，但实际是: %s", decryptedData)
 	}
 
-	if contains(decryptedData, "PRODUCT_c8b1") {
-		t.Errorf("解密后的文本不应该包含 'PRODUCT_c8b1'，但实际是: %s", decryptedData)
+	if contains(decryptedData, "{PRODUCT_c8b1}") {
+		t.Errorf("解密后的文本不应该包含 '{PRODUCT_c8b1}'，但实际是: %s", decryptedData)
+	}
+}
+
+// TestDecryptionEndToEnd_TextString 解密纯文本字符串的端到端测试
+func TestDecryptionEndToEnd_TextString(t *testing.T) {
+	router := setupRouter()
+
+	// 准备请求数据（使用纯文本字符串格式，带大括号）
+	requestBody := map[string]interface{}{
+		"data_with_anonymized_codes": "分析显示，{REGION_a3f5} 区域的 {PRODUCT_c8b1} 表现最佳。",
+		"mappings": map[string]interface{}{
+			"categorical_mappings": map[string]interface{}{
+				"REGION": map[string]interface{}{
+					"REGION_a3f5": "华东",
+				},
+				"PRODUCT": map[string]interface{}{
+					"PRODUCT_c8b1": "手机",
+				},
+			},
+		},
+	}
+
+	requestBodyBytes, _ := json.Marshal(requestBody)
+	requestBodyStr := string(requestBodyBytes)
+
+	// 生成签名
+	systemID := "BI_REPORT_SYSTEM"
+	userID := "user123"
+	secret := "a_very_strong_and_long_secret_for_bi"
+	signature := generateSignature(systemID, userID, secret, requestBodyStr)
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	authHeader := "MCP-HMAC-SHA256 SystemID=" + systemID + ",UserID=" + userID + ",Timestamp=" + timestamp + ",Signature=" + signature
+
+	// 创建请求
+	req, _ := http.NewRequest("POST", "/v1/decrypt", bytes.NewBufferString(requestBodyStr))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+
+	// 执行请求
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// 验证响应
+	if w.Code != http.StatusOK {
+		t.Errorf("期望状态码 200，得到 %d, 响应: %s", w.Code, w.Body.String())
+		return
+	}
+
+	// 解析响应
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("解析响应失败: %v", err)
+	}
+
+	// 验证decrypted_data是字符串
+	decryptedData, ok := response["decrypted_data"].(string)
+	if !ok {
+		t.Fatal("decrypted_data应该是字符串")
+	}
+
+	// 验证已被解密
+	if !contains(decryptedData, "华东") {
+		t.Errorf("解密后的文本应该包含 '华东'，但实际是: %s", decryptedData)
+	}
+
+	if !contains(decryptedData, "手机") {
+		t.Errorf("解密后的文本应该包含 '手机'，但实际是: %s", decryptedData)
+	}
+
+	// 验证编码已被替换
+	if contains(decryptedData, "{REGION_a3f5}") {
+		t.Errorf("解密后的文本不应该包含 '{REGION_a3f5}'，但实际是: %s", decryptedData)
+	}
+
+	if contains(decryptedData, "{PRODUCT_c8b1}") {
+		t.Errorf("解密后的文本不应该包含 '{PRODUCT_c8b1}'，但实际是: %s", decryptedData)
 	}
 }
 
@@ -463,12 +431,41 @@ func TestAnonymizationAndDecryptionIntegration(t *testing.T) {
 		t.Fatalf("解析匿名化响应失败: %v", err)
 	}
 
-	anonymizedPayload := anonymizeResponse["anonymized_payload"].(map[string]interface{})
 	mappings := anonymizeResponse["mappings_to_store"].(map[string]interface{})
 
-	// 第二步：解密
+	// 第二步：解密（模拟AI返回带大括号的纯文本）
+	// 从映射表中提取编码
+	catMappings, ok := mappings["categorical_mappings"].(map[string]interface{})
+	if !ok {
+		t.Fatal("categorical_mappings格式不正确")
+	}
+
+	regionMappings, ok := catMappings["REGION"].(map[string]interface{})
+	if !ok {
+		t.Fatal("REGION映射格式不正确")
+	}
+
+	productMappings, ok := catMappings["PRODUCT"].(map[string]interface{})
+	if !ok {
+		t.Fatal("PRODUCT映射格式不正确")
+	}
+
+	// 获取编码（不带大括号）
+	var regionCode, productCode string
+	for code := range regionMappings {
+		regionCode = code
+		break
+	}
+	for code := range productMappings {
+		productCode = code
+		break
+	}
+
+	// AI返回的文本应该包含带大括号的编码
+	aiResponseText := fmt.Sprintf("分析显示，{%s} 区域的 {%s} 产品表现最佳，建议重点关注。", regionCode, productCode)
+
 	decryptRequest := map[string]interface{}{
-		"data_with_anonymized_codes": anonymizedPayload,
+		"data_with_anonymized_codes": aiResponseText,
 		"mappings":                   mappings,
 	}
 
@@ -498,13 +495,23 @@ func TestAnonymizationAndDecryptionIntegration(t *testing.T) {
 		t.Fatalf("解析解密响应失败: %v", err)
 	}
 
-	decryptedData := decryptResponse["decrypted_data"].(map[string]interface{})
+	decryptedData, ok := decryptResponse["decrypted_data"].(string)
+	if !ok {
+		t.Fatal("decrypted_data应该是字符串")
+	}
 
-	// 验证解密结果与原始数据一致
-	if !deepEqual(originalPayload, decryptedData) {
-		t.Error("解密后的数据与原始数据不一致")
-		t.Logf("原始数据: %+v", originalPayload)
-		t.Logf("解密数据: %+v", decryptedData)
+	// 验证解密结果包含原始值
+	if !contains(decryptedData, "华东") {
+		t.Errorf("解密结果应该包含 '华东'，但实际是: %s", decryptedData)
+	}
+
+	if !contains(decryptedData, "手机") {
+		t.Errorf("解密结果应该包含 '手机'，但实际是: %s", decryptedData)
+	}
+
+	// 验证编码已被替换
+	if contains(decryptedData, regionCode) || contains(decryptedData, productCode) {
+		t.Errorf("解密结果不应该包含编码，但实际是: %s", decryptedData)
 	}
 }
 
@@ -520,6 +527,178 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestAnonymizationErrorCases 匿名化错误场景测试
+func TestAnonymizationErrorCases(t *testing.T) {
+	router := setupRouter()
+
+	testCases := []struct {
+		name           string
+		requestBody    map[string]interface{}
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name: "缺少session_id",
+			requestBody: map[string]interface{}{
+				"payload": map[string]interface{}{
+					"test": "value",
+				},
+				"anonymization_rules": []interface{}{},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "session_id不能为空",
+		},
+		{
+			name: "缺少payload",
+			requestBody: map[string]interface{}{
+				"session_id":          "test_session",
+				"anonymization_rules": []interface{}{},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "payload不能为空",
+		},
+		{
+			name: "缺少anonymization_rules",
+			requestBody: map[string]interface{}{
+				"session_id": "test_session",
+				"payload": map[string]interface{}{
+					"test": "value",
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "anonymization_rules不能为空",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBodyBytes, _ := json.Marshal(tc.requestBody)
+			requestBodyStr := string(requestBodyBytes)
+
+			systemID := "BI_REPORT_SYSTEM"
+			userID := "user123"
+			secret := "a_very_strong_and_long_secret_for_bi"
+			signature := generateSignature(systemID, userID, secret, requestBodyStr)
+			timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+			authHeader := "MCP-HMAC-SHA256 SystemID=" + systemID + ",UserID=" + userID + ",Timestamp=" + timestamp + ",Signature=" + signature
+
+			req, _ := http.NewRequest("POST", "/v1/anonymize", bytes.NewBufferString(requestBodyStr))
+			req.Header.Set("Authorization", authHeader)
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tc.expectedStatus {
+				t.Errorf("测试 '%s' 期望状态码 %d，得到 %d, 响应: %s", tc.name, tc.expectedStatus, w.Code, w.Body.String())
+				return
+			}
+
+			if tc.expectedError != "" {
+				var response map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+					t.Fatalf("解析响应失败: %v", err)
+				}
+
+				errorMsg, ok := response["error"].(string)
+				if !ok {
+					t.Errorf("测试 '%s' 期望错误消息，但响应中没有error字段", tc.name)
+					return
+				}
+
+				if !contains(errorMsg, tc.expectedError) {
+					t.Errorf("测试 '%s' 期望错误包含 '%s'，得到 '%s'", tc.name, tc.expectedError, errorMsg)
+				}
+			}
+		})
+	}
+}
+
+// TestDecryptionErrorCases 解密错误场景测试
+func TestDecryptionErrorCases(t *testing.T) {
+	router := setupRouter()
+
+	testCases := []struct {
+		name           string
+		requestBody    map[string]interface{}
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name: "缺少data_with_anonymized_codes",
+			requestBody: map[string]interface{}{
+				"mappings": map[string]interface{}{
+					"categorical_mappings": map[string]interface{}{},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "data_with_anonymized_codes不能为空",
+		},
+		{
+			name: "缺少mappings",
+			requestBody: map[string]interface{}{
+				"data_with_anonymized_codes": "测试文本",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "mappings不能为空",
+		},
+		{
+			name: "空mappings",
+			requestBody: map[string]interface{}{
+				"data_with_anonymized_codes": "测试文本",
+				"mappings":                   map[string]interface{}{},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "mappings不能为空",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBodyBytes, _ := json.Marshal(tc.requestBody)
+			requestBodyStr := string(requestBodyBytes)
+
+			systemID := "BI_REPORT_SYSTEM"
+			userID := "user123"
+			secret := "a_very_strong_and_long_secret_for_bi"
+			signature := generateSignature(systemID, userID, secret, requestBodyStr)
+			timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+			authHeader := "MCP-HMAC-SHA256 SystemID=" + systemID + ",UserID=" + userID + ",Timestamp=" + timestamp + ",Signature=" + signature
+
+			req, _ := http.NewRequest("POST", "/v1/decrypt", bytes.NewBufferString(requestBodyStr))
+			req.Header.Set("Authorization", authHeader)
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tc.expectedStatus {
+				t.Errorf("测试 '%s' 期望状态码 %d，得到 %d, 响应: %s", tc.name, tc.expectedStatus, w.Code, w.Body.String())
+				return
+			}
+
+			if tc.expectedError != "" {
+				var response map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+					t.Fatalf("解析响应失败: %v", err)
+				}
+
+				errorMsg, ok := response["error"].(string)
+				if !ok {
+					t.Errorf("测试 '%s' 期望错误消息，但响应中没有error字段", tc.name)
+					return
+				}
+
+				if !contains(errorMsg, tc.expectedError) {
+					t.Errorf("测试 '%s' 期望错误包含 '%s'，得到 '%s'", tc.name, tc.expectedError, errorMsg)
+				}
+			}
+		})
+	}
 }
 
 // 辅助函数：深度比较两个interface{}

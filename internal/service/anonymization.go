@@ -212,7 +212,7 @@ func (a *Anonymizer) generateMapCode(value string, dataType string) string {
 		return code
 	}
 
-	// 生成新编码
+	// 生成新编码（不带大括号）
 	if _, exists := a.categoricalMappings[dataType]; !exists {
 		a.categoricalMappings[dataType] = make(map[string]string)
 	}
@@ -221,7 +221,7 @@ func (a *Anonymizer) generateMapCode(value string, dataType string) string {
 	randomSuffix := generateRandomHex(4)
 	code := fmt.Sprintf("%s_%s", dataType, randomSuffix)
 
-	// 存储映射
+	// 存储映射（不包括大括号）
 	a.categoricalMappings[dataType][code] = value
 	a.valueToCode[key] = code
 
@@ -237,11 +237,11 @@ func (a *Anonymizer) generatePlaceholder(value interface{}, dataType string) str
 		return code
 	}
 
-	// 生成新占位符
+	// 生成新占位符（不带大括号）
 	a.placeholderCounter++
 	placeholder := fmt.Sprintf("%s_plc_%d", dataType, a.placeholderCounter)
 
-	// 存储映射
+	// 存储映射（不包括大括号）
 	a.metricPlaceholderMappings[placeholder] = value
 	a.valueToCode[key] = placeholder
 
